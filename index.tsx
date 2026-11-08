@@ -430,6 +430,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Detect Access Token vs API Key before sending
+        if (!isDeepSeek && testKey && (testKey.startsWith('AQ.') || testKey.startsWith('ya29.'))) {
+            testKeyFeedback.className = 'test-feedback-box error';
+            testKeyFeedback.innerHTML = `⚠️ <strong>Lỗi loại Key:</strong> Key bạn vừa nhập bắt đầu bằng "<code>${testKey.slice(0, 3)}</code>" là Access Token tạm thời, không phải Gemini API Key.<br><br>• Gemini API Key chuẩn luôn bắt đầu bằng: <strong><code>AIzaSy...</code></strong><br>• Lấy key miễn phí tại: <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #93c5fd; text-decoration: underline; font-weight: bold;">aistudio.google.com/app/apikey</a>`;
+            testKeyFeedback.classList.remove('hidden');
+            return;
+        }
+
         testKeyFeedback.className = 'test-feedback-box loading';
         testKeyFeedback.innerHTML = `⏳ Đang kiểm tra kết nối với <strong>${isDeepSeek ? 'DeepSeek' : 'Google Gemini'}</strong> (Model: ${testModel})...`;
         testKeyFeedback.classList.remove('hidden');
@@ -445,20 +453,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     baseUrl: testBaseUrl
                 })
             });
-            const data = await res.json();
+
+            const rawText = await res.text();
+            let data: any;
+            try {
+                data = JSON.parse(rawText);
+            } catch {
+                throw new Error(`Máy chủ trả về phản hồi không hợp lệ (${res.status}). Vui lòng tải lại trang hoặc thử lại.`);
+            }
+
             if (data.success) {
                 testKeyFeedback.className = 'test-feedback-box success';
                 testKeyFeedback.innerHTML = `✅ <strong>Thành công!</strong> ${data.message}`;
             } else if (data.code === 429 || data.errorType === 'FREE_TIER_NO_QUOTA') {
                 testKeyFeedback.className = 'test-feedback-box error';
-                testKeyFeedback.innerHTML = `⚠️ <strong>Hạn mức Free Tier = 0:</strong> Key này hợp lệ nhưng đang ở gói Free Tier của Google AI Studio. Để tạo ảnh (model ${testModel}), tài khoản Google của bạn cần kích hoạt <strong>Billing (Pay-as-you-go)</strong> tại <a href="https://aistudio.google.com" target="_blank" style="color: #93c5fd; text-decoration: underline;">aistudio.google.com</a>.`;
+                testKeyFeedback.innerHTML = `⚠️ <strong>Hạn mức Free Tier = 0:</strong> Key này hợp lệ nhưng đang ở gói Free Tier của Google AI Studio (hạn mức model ảnh là 0 lượt/phút). Để tạo ảnh (model ${testModel}), tài khoản Google của bạn cần kích hoạt <strong>Billing (Pay-as-you-go)</strong> tại <a href="https://aistudio.google.com" target="_blank" style="color: #93c5fd; text-decoration: underline; font-weight: bold;">aistudio.google.com</a>.`;
+            } else if (data.errorType === 'ACCESS_TOKEN_NOT_SUPPORTED') {
+                testKeyFeedback.className = 'test-feedback-box error';
+                testKeyFeedback.innerHTML = `⚠️ <strong>Sai loại Key:</strong> ${data.message}<br><br>👉 Lấy Gemini API Key chuẩn (bắt đầu bằng <code>AIzaSy...</code>) tại <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #93c5fd; text-decoration: underline; font-weight: bold;">aistudio.google.com/app/apikey</a>.`;
             } else {
                 testKeyFeedback.className = 'test-feedback-box error';
                 testKeyFeedback.innerHTML = `❌ <strong>Thất bại:</strong> ${data.message || 'Không thể xác thực key.'}`;
             }
         } catch (e: any) {
             testKeyFeedback.className = 'test-feedback-box error';
-            testKeyFeedback.innerHTML = `❌ <strong>Lỗi mạng:</strong> ${e.message || 'Không thể kết nối đến máy chủ.'}`;
+            testKeyFeedback.innerHTML = `❌ <strong>Lỗi kết nối:</strong> ${e.message || 'Không thể kết nối đến máy chủ.'}`;
         }
     }
 
@@ -1009,7 +1028,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         })
                     });
 
-                    const data = await response.json();
+                    const rawText = await response.text();
+                    let data: any;
+                    try {
+                        data = JSON.parse(rawText);
+                    } catch {
+                        throw new Error(`Máy chủ trả về dữ liệu không hợp lệ (${response.status}). Vui lòng thử lại sau vài giây.`);
+                    }
 
                     if (!response.ok) {
                         const errMsg = data.error || 'Lỗi từ máy chủ tạo ảnh.';

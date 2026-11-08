@@ -308,7 +308,10 @@
                             <span id="activeKeyStatus" class="active-key-pill">Đang dùng: Mặc định môi trường</span>
                         </div>
                         <textarea id="apiKeysInput" class="api-textarea" rows="5" placeholder="Dán các Gemini API Key vào đây (mỗi key trên 1 dòng):&#10;AIzaSy...Key1&#10;AIzaSy...Key2"></textarea>
-                        <p class="api-hint">
+                        <p class="api-hint" style="margin-top: 6px;">
+                            🔑 <strong>Định dạng key:</strong> Gemini API Key chuẩn luôn bắt đầu bằng <code>AIzaSy...</code> (lấy miễn phí tại <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #93c5fd; text-decoration: underline;">aistudio.google.com/app/apikey</a>). Không dùng token bắt đầu bằng "AQ." (access token tạm thời).
+                        </p>
+                        <p class="api-hint" style="margin-top: 4px;">
                             💡 <strong>Xoay vòng Round-Robin:</strong> Tự động luân phiên đổi key sau mỗi lần tạo ảnh và tự động chuyển key khi gặp lỗi rate limit (429).
                         </p>
                     </div>

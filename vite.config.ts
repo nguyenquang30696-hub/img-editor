@@ -30,11 +30,12 @@ function apiDevPlugin(): Plugin {
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
-          try {
-            const { provider = 'gemini', apiKey, model, baseUrl } = JSON.parse(body || '{}');
+          const { provider = 'gemini', apiKey, model, baseUrl } = JSON.parse(body || '{}');
+          const providedKey = sanitizeKey(apiKey);
 
+          try {
             if (provider === 'deepseek') {
-              const cleanKey = sanitizeKey(apiKey) || process.env.DEEPSEEK_API_KEY || '';
+              const cleanKey = providedKey || process.env.DEEPSEEK_API_KEY || '';
               if (!cleanKey) {
                 res.statusCode = 400;
                 res.setHeader('Content-Type', 'application/json');
@@ -131,6 +132,17 @@ function apiDevPlugin(): Plugin {
             const status = error?.status || error?.code || 500;
             res.setHeader('Content-Type', 'application/json');
 
+            if (msg.includes('ACCESS_TOKEN_TYPE_UNSUPPORTED') || providedKey.startsWith('AQ.') || providedKey.startsWith('ya29.')) {
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                success: false,
+                code: 401,
+                errorType: 'ACCESS_TOKEN_NOT_SUPPORTED',
+                message: 'Key bạn vừa nhập bắt đầu bằng "AQ." là Access Token tạm thời, không phải Gemini API Key. Google AI Studio chỉ chấp nhận API Key chuẩn bắt đầu bằng "AIzaSy...". Hãy lấy key tại https://aistudio.google.com/app/apikey.',
+              }));
+              return;
+            }
+
             if (msg.includes('free_tier') || msg.includes('limit: 0') || status === 429) {
               res.statusCode = 200;
               res.end(JSON.stringify({
@@ -142,13 +154,13 @@ function apiDevPlugin(): Plugin {
               return;
             }
 
-            if (msg.includes('API_KEY_INVALID') || status === 400 || status === 403) {
+            if (msg.includes('API_KEY_INVALID') || status === 400 || status === 403 || msg.includes('UNAUTHENTICATED')) {
               res.statusCode = 200;
               res.end(JSON.stringify({
                 success: false,
                 code: status,
                 errorType: 'INVALID_KEY',
-                message: 'API Key không hợp lệ hoặc thiếu quyền hạn.',
+                message: 'API Key không hợp lệ. Vui lòng kiểm tra lại key (Gemini API Key thường bắt đầu bằng "AIzaSy...").',
               }));
               return;
             }
@@ -178,8 +190,10 @@ function apiDevPlugin(): Plugin {
         });
 
         req.on('end', async () => {
+          const { parts, apiKey: clientApiKey, model: clientModel, provider = 'gemini', baseUrl } = JSON.parse(body || '{}');
+          const cleanClientKey = sanitizeKey(clientApiKey);
+
           try {
-            const { parts, apiKey: clientApiKey, model: clientModel, provider = 'gemini', baseUrl } = JSON.parse(body || '{}');
             if (!parts || !Array.isArray(parts)) {
               res.statusCode = 400;
               res.setHeader('Content-Type', 'application/json');
@@ -253,7 +267,6 @@ function apiDevPlugin(): Plugin {
             }
 
             // --- GEMINI PROVIDER ---
-            const cleanClientKey = sanitizeKey(clientApiKey);
             const effectiveKey = cleanClientKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
 
             if (!effectiveKey) {
@@ -318,10 +331,12 @@ function apiDevPlugin(): Plugin {
             const status = err?.status || err?.code || 500;
 
             let friendlyMsg = rawMsg || 'Đã xảy ra lỗi khi tạo ảnh.';
-            if (rawMsg.includes('free_tier') || rawMsg.includes('limit: 0') || status === 429) {
+            if (rawMsg.includes('ACCESS_TOKEN_TYPE_UNSUPPORTED') || (cleanClientKey && (cleanClientKey.startsWith('AQ.') || cleanClientKey.startsWith('ya29.')))) {
+              friendlyMsg = 'Key bạn nhập bắt đầu bằng "AQ." là Access Token tạm thời, không phải Gemini API Key. Google AI Studio chỉ chấp nhận API Key chuẩn bắt đầu bằng "AIzaSy...". Vui lòng tạo key tại https://aistudio.google.com/app/apikey.';
+            } else if (rawMsg.includes('free_tier') || rawMsg.includes('limit: 0') || status === 429) {
               friendlyMsg = 'Lỗi 429: Key đang dùng thuộc gói Free Tier (hạn mức model tạo ảnh là 0 lượt/phút). Để tạo ảnh, tài khoản Google của Key cần bật Billing (Pay-as-you-go) tại https://aistudio.google.com.';
-            } else if (rawMsg.includes('API_KEY_INVALID') || status === 400 || status === 403) {
-              friendlyMsg = 'Lỗi xác thực: API Key không hợp lệ hoặc thiếu quyền hạn.';
+            } else if (rawMsg.includes('API_KEY_INVALID') || status === 400 || status === 403 || rawMsg.includes('UNAUTHENTICATED')) {
+              friendlyMsg = 'Lỗi xác thực: API Key không hợp lệ. Vui lòng kiểm tra lại key (Gemini API Key thường bắt đầu bằng "AIzaSy...").';
             }
 
             res.statusCode = status === 429 ? 429 : 500;
