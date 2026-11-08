@@ -115,10 +115,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearApiKeysBtn = getElement<HTMLButtonElement>('clearApiKeysBtn');
     const testApiKeysBtn = getElement<HTMLButtonElement>('testApiKeysBtn');
     const testKeyFeedback = getElement('testKeyFeedback');
+
+    // Provider Tabs & Radio
+    const tabGeminiBtn = getElement<HTMLButtonElement>('tabGeminiBtn');
+    const tabDeepseekBtn = getElement<HTMLButtonElement>('tabDeepseekBtn');
+    const geminiTabPane = getElement('geminiTabPane');
+    const deepseekTabPane = getElement('deepseekTabPane');
+    const useGeminiRadio = getElement<HTMLInputElement>('useGeminiRadio');
+    const useDeepseekRadio = getElement<HTMLInputElement>('useDeepseekRadio');
+    const geminiTabBadge = getElement('geminiTabBadge');
+    const deepseekTabBadge = getElement('deepseekTabBadge');
+
+    // Gemini Inputs
     const modelSelect = getElement<HTMLSelectElement>('modelSelect');
     const apiKeysInput = getElement<HTMLTextAreaElement>('apiKeysInput');
     const activeKeyStatus = getElement('activeKeyStatus');
     const roundRobinStatusText = getElement('roundRobinStatusText');
+
+    // DeepSeek Inputs
+    const deepseekModelSelect = getElement<HTMLSelectElement>('deepseekModelSelect');
+    const deepseekBaseUrlInput = getElement<HTMLInputElement>('deepseekBaseUrlInput');
+    const deepseekApiKeysInput = getElement<HTMLTextAreaElement>('deepseekApiKeysInput');
+    const deepseekKeyStatus = getElement('deepseekKeyStatus');
+    const deepseekRoundRobinText = getElement('deepseekRoundRobinText');
 
     if (
         !uploadArea || !fileInput || !imagePreview || !uploadPlaceholder ||
@@ -141,9 +160,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const initialGalleryHTML = imageGallery.innerHTML;
 
     // --- API KEYS & ROUND-ROBIN STATE ---
+    let currentProviderTab: 'gemini' | 'deepseek' = 'gemini';
+    let activeProvider: 'gemini' | 'deepseek' = 'gemini';
+
+    // Gemini State
     let userApiKeys: string[] = [];
     let currentKeyRoundRobinIndex = 0;
     let userSelectedModel = 'gemini-3.1-flash-lite-image';
+
+    // DeepSeek State
+    let userDeepSeekKeys: string[] = [];
+    let currentDeepSeekKeyIndex = 0;
+    let userDeepSeekModel = 'deepseek-flash';
+    let userDeepSeekBaseUrl = 'https://api.deepseek.com/v1';
 
     function sanitizeKey(k?: string): string {
         if (!k) return '';
@@ -152,6 +181,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadApiSettings() {
         try {
+            // Load Active Provider
+            const storedProvider = localStorage.getItem('ken_active_provider');
+            if (storedProvider === 'deepseek' || storedProvider === 'gemini') {
+                activeProvider = storedProvider;
+            }
+
+            // Load Gemini Settings
             const storedKeys = localStorage.getItem('ken_gemini_api_keys');
             if (storedKeys) {
                 userApiKeys = JSON.parse(storedKeys);
@@ -169,31 +205,90 @@ document.addEventListener('DOMContentLoaded', () => {
             if (storedIndex) {
                 currentKeyRoundRobinIndex = parseInt(storedIndex, 10) || 0;
             }
+
+            // Load DeepSeek Settings
+            const storedDeepSeekKeys = localStorage.getItem('ken_deepseek_api_keys');
+            if (storedDeepSeekKeys) {
+                userDeepSeekKeys = JSON.parse(storedDeepSeekKeys);
+                if (Array.isArray(userDeepSeekKeys)) {
+                    userDeepSeekKeys = userDeepSeekKeys.map(sanitizeKey).filter(Boolean);
+                } else {
+                    userDeepSeekKeys = [];
+                }
+            }
+            const storedDsModel = localStorage.getItem('ken_deepseek_model');
+            if (storedDsModel) {
+                userDeepSeekModel = storedDsModel;
+            }
+            const storedDsBaseUrl = localStorage.getItem('ken_deepseek_base_url');
+            if (storedDsBaseUrl) {
+                userDeepSeekBaseUrl = storedDsBaseUrl;
+            }
+            const storedDsIndex = localStorage.getItem('ken_deepseek_key_index');
+            if (storedDsIndex) {
+                currentDeepSeekKeyIndex = parseInt(storedDsIndex, 10) || 0;
+            }
         } catch (e) {
             console.error('Error loading API settings from localStorage:', e);
         }
         updateApiUI();
     }
 
+    function switchProviderTab(target: 'gemini' | 'deepseek') {
+        currentProviderTab = target;
+        if (target === 'gemini') {
+            tabGeminiBtn?.classList.add('active');
+            tabDeepseekBtn?.classList.remove('active');
+            geminiTabPane?.classList.remove('hidden');
+            geminiTabPane?.classList.add('active');
+            deepseekTabPane?.classList.add('hidden');
+            deepseekTabPane?.classList.remove('active');
+        } else {
+            tabDeepseekBtn?.classList.add('active');
+            tabGeminiBtn?.classList.remove('active');
+            deepseekTabPane?.classList.remove('hidden');
+            deepseekTabPane?.classList.add('active');
+            geminiTabPane?.classList.add('hidden');
+            geminiTabPane?.classList.remove('active');
+        }
+        if (testKeyFeedback) testKeyFeedback.classList.add('hidden');
+    }
+
     function updateApiUI() {
+        // Update Header Badge
         if (apiKeyBadge) {
-            if (userApiKeys.length > 0) {
-                apiKeyBadge.textContent = `${userApiKeys.length} keys`;
+            if (activeProvider === 'deepseek') {
+                apiKeyBadge.textContent = userDeepSeekKeys.length > 0 ? `DeepSeek (${userDeepSeekKeys.length})` : 'DeepSeek';
                 apiKeyBadge.classList.add('custom');
             } else {
-                apiKeyBadge.textContent = 'Auto';
-                apiKeyBadge.classList.remove('custom');
+                if (userApiKeys.length > 0) {
+                    apiKeyBadge.textContent = `${userApiKeys.length} keys`;
+                    apiKeyBadge.classList.add('custom');
+                } else {
+                    apiKeyBadge.textContent = 'Auto';
+                    apiKeyBadge.classList.remove('custom');
+                }
             }
         }
 
+        // Update Radio Buttons
+        if (useGeminiRadio) useGeminiRadio.checked = activeProvider === 'gemini';
+        if (useDeepseekRadio) useDeepseekRadio.checked = activeProvider === 'deepseek';
+
+        // Update Tab Badges
+        if (geminiTabBadge) {
+            geminiTabBadge.textContent = userApiKeys.length > 0 ? `${userApiKeys.length} keys` : 'Mặc định';
+        }
+        if (deepseekTabBadge) {
+            deepseekTabBadge.textContent = userDeepSeekKeys.length > 0 ? `${userDeepSeekKeys.length} keys` : 'Flash';
+        }
+
+        // Update Gemini Pane
         if (activeKeyStatus) {
-            if (userApiKeys.length > 0) {
-                activeKeyStatus.textContent = `Đang dùng: ${userApiKeys.length} key riêng (Round-Robin)`;
-            } else {
-                activeKeyStatus.textContent = 'Đang dùng: Mặc định môi trường';
-            }
+            activeKeyStatus.textContent = userApiKeys.length > 0
+                ? `Đang dùng: ${userApiKeys.length} key riêng (Round-Robin)`
+                : 'Đang dùng: Mặc định môi trường';
         }
-
         if (roundRobinStatusText) {
             if (userApiKeys.length > 0) {
                 const nextNum = (currentKeyRoundRobinIndex % userApiKeys.length) + 1;
@@ -202,18 +297,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 roundRobinStatusText.textContent = '🔁 Trạng thái: Chưa có key riêng (dùng key môi trường)';
             }
         }
+        if (modelSelect) modelSelect.value = userSelectedModel;
+        if (apiKeysInput) apiKeysInput.value = userApiKeys.join('\n');
 
-        if (modelSelect) {
-            modelSelect.value = userSelectedModel;
+        // Update DeepSeek Pane
+        if (deepseekKeyStatus) {
+            deepseekKeyStatus.textContent = userDeepSeekKeys.length > 0
+                ? `Đang có: ${userDeepSeekKeys.length} key (Round-Robin)`
+                : 'Chưa có key';
         }
-
-        if (apiKeysInput) {
-            apiKeysInput.value = userApiKeys.join('\n');
+        if (deepseekRoundRobinText) {
+            if (userDeepSeekKeys.length > 0) {
+                const nextDsNum = (currentDeepSeekKeyIndex % userDeepSeekKeys.length) + 1;
+                deepseekRoundRobinText.textContent = `🔁 Xoay vòng: Tổng ${userDeepSeekKeys.length} key • Lần tới sẽ dùng Key #${nextDsNum}`;
+            } else {
+                deepseekRoundRobinText.textContent = '🔁 Trạng thái: Chưa có key riêng DeepSeek';
+            }
         }
+        if (deepseekModelSelect) deepseekModelSelect.value = userDeepSeekModel;
+        if (deepseekBaseUrlInput) deepseekBaseUrlInput.value = userDeepSeekBaseUrl;
+        if (deepseekApiKeysInput) deepseekApiKeysInput.value = userDeepSeekKeys.join('\n');
     }
 
     function openApiModal() {
         updateApiUI();
+        switchProviderTab(activeProvider);
         if (testKeyFeedback) testKeyFeedback.classList.add('hidden');
         if (apiModal) apiModal.classList.remove('hidden');
     }
@@ -223,61 +331,107 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function saveApiSettings() {
+        // Save Active Provider from Radio
+        if (useDeepseekRadio && useDeepseekRadio.checked) {
+            activeProvider = 'deepseek';
+        } else {
+            activeProvider = 'gemini';
+        }
+        localStorage.setItem('ken_active_provider', activeProvider);
+
+        // Save Gemini Settings
         if (modelSelect) {
             userSelectedModel = modelSelect.value;
             localStorage.setItem('ken_gemini_selected_model', userSelectedModel);
         }
-
         if (apiKeysInput) {
             const raw = apiKeysInput.value;
-            const parsed = raw
+            userApiKeys = raw
                 .split(/[\n,;]+/)
                 .map(sanitizeKey)
                 .filter(k => k.length > 0 && !k.startsWith('#'));
-            userApiKeys = parsed;
             localStorage.setItem('ken_gemini_api_keys', JSON.stringify(userApiKeys));
         }
 
+        // Save DeepSeek Settings
+        if (deepseekModelSelect) {
+            userDeepSeekModel = deepseekModelSelect.value;
+            localStorage.setItem('ken_deepseek_model', userDeepSeekModel);
+        }
+        if (deepseekBaseUrlInput) {
+            userDeepSeekBaseUrl = deepseekBaseUrlInput.value.trim() || 'https://api.deepseek.com/v1';
+            localStorage.setItem('ken_deepseek_base_url', userDeepSeekBaseUrl);
+        }
+        if (deepseekApiKeysInput) {
+            const rawDs = deepseekApiKeysInput.value;
+            userDeepSeekKeys = rawDs
+                .split(/[\n,;]+/)
+                .map(sanitizeKey)
+                .filter(k => k.length > 0 && !k.startsWith('#'));
+            localStorage.setItem('ken_deepseek_api_keys', JSON.stringify(userDeepSeekKeys));
+        }
+
         currentKeyRoundRobinIndex = 0;
+        currentDeepSeekKeyIndex = 0;
         localStorage.setItem('ken_gemini_key_index', '0');
+        localStorage.setItem('ken_deepseek_key_index', '0');
 
         updateApiUI();
         closeApiModal();
-        if (userApiKeys.length > 0) {
-            showNotification(`Đã lưu ${userApiKeys.length} API key (xoay vòng Round-Robin). Model: ${userSelectedModel}`, 'success');
-        } else {
-            showNotification(`Đã lưu cài đặt. Sử dụng key môi trường. Model: ${userSelectedModel}`, 'info');
-        }
+
+        const providerLabel = activeProvider === 'deepseek' ? `DeepSeek (${userDeepSeekModel})` : `Gemini (${userSelectedModel})`;
+        showNotification(`Đã lưu cài đặt API! Đang kích hoạt nhà cung cấp: ${providerLabel}`, 'success');
     }
 
     function clearApiKeys() {
-        userApiKeys = [];
-        localStorage.removeItem('ken_gemini_api_keys');
-        currentKeyRoundRobinIndex = 0;
-        localStorage.setItem('ken_gemini_key_index', '0');
-        if (apiKeysInput) apiKeysInput.value = '';
+        if (currentProviderTab === 'deepseek') {
+            userDeepSeekKeys = [];
+            localStorage.removeItem('ken_deepseek_api_keys');
+            currentDeepSeekKeyIndex = 0;
+            localStorage.setItem('ken_deepseek_key_index', '0');
+            if (deepseekApiKeysInput) deepseekApiKeysInput.value = '';
+            showNotification('Đã xóa danh sách API key DeepSeek.', 'info');
+        } else {
+            userApiKeys = [];
+            localStorage.removeItem('ken_gemini_api_keys');
+            currentKeyRoundRobinIndex = 0;
+            localStorage.setItem('ken_gemini_key_index', '0');
+            if (apiKeysInput) apiKeysInput.value = '';
+            showNotification('Đã xóa danh sách API key Gemini. Sử dụng key môi trường.', 'info');
+        }
         if (testKeyFeedback) testKeyFeedback.classList.add('hidden');
         updateApiUI();
-        showNotification('Đã xóa danh sách API key riêng. Ứng dụng sẽ dùng key môi trường.', 'info');
     }
 
     async function testKeyConnection() {
         if (!testKeyFeedback) return;
-        const currentModel = modelSelect?.value || userSelectedModel;
+        const isDeepSeek = currentProviderTab === 'deepseek';
+
         let testKey = '';
-        if (apiKeysInput && apiKeysInput.value.trim()) {
-            const raw = apiKeysInput.value;
-            const parsed = raw
-                .split(/[\n,;]+/)
-                .map(sanitizeKey)
-                .filter(k => k.length > 0 && !k.startsWith('#'));
-            if (parsed.length > 0) testKey = parsed[0];
-        } else if (userApiKeys.length > 0) {
-            testKey = userApiKeys[0];
+        let testModel = '';
+        let testBaseUrl = '';
+
+        if (isDeepSeek) {
+            testModel = deepseekModelSelect?.value || userDeepSeekModel;
+            testBaseUrl = deepseekBaseUrlInput?.value || userDeepSeekBaseUrl;
+            if (deepseekApiKeysInput && deepseekApiKeysInput.value.trim()) {
+                const parsed = deepseekApiKeysInput.value.split(/[\n,;]+/).map(sanitizeKey).filter(Boolean);
+                if (parsed.length > 0) testKey = parsed[0];
+            } else if (userDeepSeekKeys.length > 0) {
+                testKey = userDeepSeekKeys[0];
+            }
+        } else {
+            testModel = modelSelect?.value || userSelectedModel;
+            if (apiKeysInput && apiKeysInput.value.trim()) {
+                const parsed = apiKeysInput.value.split(/[\n,;]+/).map(sanitizeKey).filter(Boolean);
+                if (parsed.length > 0) testKey = parsed[0];
+            } else if (userApiKeys.length > 0) {
+                testKey = userApiKeys[0];
+            }
         }
 
         testKeyFeedback.className = 'test-feedback-box loading';
-        testKeyFeedback.innerHTML = `⏳ Đang kiểm tra kết nối với Google Gemini API (Model: <strong>${currentModel}</strong>)...`;
+        testKeyFeedback.innerHTML = `⏳ Đang kiểm tra kết nối với <strong>${isDeepSeek ? 'DeepSeek' : 'Google Gemini'}</strong> (Model: ${testModel})...`;
         testKeyFeedback.classList.remove('hidden');
 
         try {
@@ -285,8 +439,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    provider: isDeepSeek ? 'deepseek' : 'gemini',
                     apiKey: testKey,
-                    model: currentModel
+                    model: testModel,
+                    baseUrl: testBaseUrl
                 })
             });
             const data = await res.json();
@@ -295,7 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 testKeyFeedback.innerHTML = `✅ <strong>Thành công!</strong> ${data.message}`;
             } else if (data.code === 429 || data.errorType === 'FREE_TIER_NO_QUOTA') {
                 testKeyFeedback.className = 'test-feedback-box error';
-                testKeyFeedback.innerHTML = `⚠️ <strong>Hạn mức Free Tier = 0:</strong> Key này hợp lệ nhưng đang ở gói Free Tier của Google AI Studio. Để tạo ảnh (model ${currentModel}), tài khoản Google của bạn cần kích hoạt <strong>Billing (Pay-as-you-go)</strong> tại <a href="https://aistudio.google.com" target="_blank" style="color: #93c5fd; text-decoration: underline;">aistudio.google.com</a>.`;
+                testKeyFeedback.innerHTML = `⚠️ <strong>Hạn mức Free Tier = 0:</strong> Key này hợp lệ nhưng đang ở gói Free Tier của Google AI Studio. Để tạo ảnh (model ${testModel}), tài khoản Google của bạn cần kích hoạt <strong>Billing (Pay-as-you-go)</strong> tại <a href="https://aistudio.google.com" target="_blank" style="color: #93c5fd; text-decoration: underline;">aistudio.google.com</a>.`;
             } else {
                 testKeyFeedback.className = 'test-feedback-box error';
                 testKeyFeedback.innerHTML = `❌ <strong>Thất bại:</strong> ${data.message || 'Không thể xác thực key.'}`;
@@ -318,12 +474,30 @@ document.addEventListener('DOMContentLoaded', () => {
         return { key, keyNum: idx + 1, total: userApiKeys.length };
     }
 
+    function getNextDeepSeekKey(): { key: string | null; keyNum: number; total: number } {
+        if (userDeepSeekKeys.length === 0) {
+            return { key: null, keyNum: 0, total: 0 };
+        }
+        const idx = currentDeepSeekKeyIndex % userDeepSeekKeys.length;
+        const key = sanitizeKey(userDeepSeekKeys[idx]);
+        currentDeepSeekKeyIndex = (currentDeepSeekKeyIndex + 1) % userDeepSeekKeys.length;
+        localStorage.setItem('ken_deepseek_key_index', currentDeepSeekKeyIndex.toString());
+        updateApiUI();
+        return { key, keyNum: idx + 1, total: userDeepSeekKeys.length };
+    }
+
     if (apiSettingsBtn) apiSettingsBtn.addEventListener('click', openApiModal);
     if (closeApiModalBtn) closeApiModalBtn.addEventListener('click', closeApiModal);
     if (cancelApiModalBtn) cancelApiModalBtn.addEventListener('click', closeApiModal);
     if (saveApiSettingsBtn) saveApiSettingsBtn.addEventListener('click', saveApiSettings);
     if (clearApiKeysBtn) clearApiKeysBtn.addEventListener('click', clearApiKeys);
     if (testApiKeysBtn) testApiKeysBtn.addEventListener('click', testKeyConnection);
+
+    if (tabGeminiBtn) tabGeminiBtn.addEventListener('click', () => switchProviderTab('gemini'));
+    if (tabDeepseekBtn) tabDeepseekBtn.addEventListener('click', () => switchProviderTab('deepseek'));
+
+    if (useGeminiRadio) useGeminiRadio.addEventListener('change', () => { activeProvider = 'gemini'; updateApiUI(); });
+    if (useDeepseekRadio) useDeepseekRadio.addEventListener('change', () => { activeProvider = 'deepseek'; updateApiUI(); });
 
     if (apiModal) {
         apiModal.addEventListener('click', (e) => {
@@ -792,18 +966,34 @@ document.addEventListener('DOMContentLoaded', () => {
                parts.push(customBackgroundPart);
            }
             
+            const isDeepSeek = activeProvider === 'deepseek';
+
+            if (isDeepSeek && userDeepSeekKeys.length === 0) {
+                showNotification('Vui lòng thêm API Key cho DeepSeek trong phần Cài đặt API (nút góc trên bên phải)', 'error');
+                openApiModal();
+                switchProviderTab('deepseek');
+                setLoadingState(false);
+                return;
+            }
+
             let attempts = 0;
-            const maxAttempts = Math.max(1, userApiKeys.length);
+            const totalKeys = isDeepSeek ? userDeepSeekKeys.length : userApiKeys.length;
+            const maxAttempts = Math.max(1, totalKeys);
             let success = false;
             let lastError = 'Không thể tạo ảnh. Vui lòng thử lại.';
 
             while (attempts < maxAttempts && !success) {
                 attempts++;
-                const { key, keyNum, total } = getNextRoundRobinKey();
+                const keyInfo = isDeepSeek ? getNextDeepSeekKey() : getNextRoundRobinKey();
+                const { key, keyNum, total } = keyInfo;
 
                 const btnText = generateBtn.querySelector('.btn-text');
-                if (btnText && total > 0) {
-                    btnText.textContent = `Đang tạo (Key #${keyNum}/${total})...`;
+                if (btnText) {
+                    if (isDeepSeek) {
+                        btnText.textContent = total > 0 ? `Đang tạo (DeepSeek Key #${keyNum}/${total})...` : `Đang kết nối DeepSeek (${userDeepSeekModel})...`;
+                    } else {
+                        btnText.textContent = total > 0 ? `Đang tạo (Gemini Key #${keyNum}/${total})...` : 'Đang xử lý ảnh với Gemini...';
+                    }
                 }
 
                 try {
@@ -811,9 +1001,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            provider: isDeepSeek ? 'deepseek' : 'gemini',
                             parts,
                             apiKey: key,
-                            model: userSelectedModel
+                            model: isDeepSeek ? userDeepSeekModel : userSelectedModel,
+                            baseUrl: isDeepSeek ? userDeepSeekBaseUrl : undefined
                         })
                     });
 
@@ -830,7 +1022,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             errMsg.includes('rate');
 
                         if (isQuotaOrLimit && attempts < maxAttempts) {
-                            showNotification(`Key #${keyNum} gặp hạn mức. Đang tự động xoay vòng sang Key tiếp theo...`, 'info');
+                            const providerName = isDeepSeek ? 'DeepSeek' : 'Gemini';
+                            showNotification(`Key ${providerName} #${keyNum} gặp hạn mức. Đang tự động xoay vòng sang Key tiếp theo...`, 'info');
                             continue;
                         }
                         throw new Error(errMsg);
@@ -840,8 +1033,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         displayResults([data.imageUrl]);
                         success = true;
                         if (total > 0) {
-                            showNotification(`Tạo ảnh thành công với Key #${keyNum}/${total} (${userSelectedModel})`, 'success');
+                            const providerName = isDeepSeek ? 'DeepSeek' : 'Gemini';
+                            const modelName = isDeepSeek ? userDeepSeekModel : userSelectedModel;
+                            showNotification(`Tạo ảnh thành công với ${providerName} Key #${keyNum}/${total} (${modelName})`, 'success');
                         }
+                    } else if (isDeepSeek && data.text) {
+                        displayDeepSeekTextResult(data.text, data.message);
+                        success = true;
+                        showNotification('DeepSeek Flash đã hoàn thành phản hồi!', 'info');
                     } else {
                         throw new Error(data.error || "Không nhận được ảnh kết quả từ AI.");
                     }
@@ -1292,6 +1491,57 @@ YÊU CẦU CUỐI CÙNG & KIỂM TRA CHÉO:
         if (imageGallery.childElementCount === 0) {
            displayError("Không thể tạo ảnh từ các tùy chọn đã chọn. Vui lòng thử lại.");
         }
+    }
+
+    function displayDeepSeekTextResult(text: string, message?: string) {
+        imageGallery.innerHTML = '';
+        imageGallery.classList.remove('single-view');
+
+        const box = document.createElement('div');
+        box.style.gridColumn = '1 / -1';
+        box.style.background = '#1e2430';
+        box.style.border = '1px solid #3b82f6';
+        box.style.borderRadius = '10px';
+        box.style.padding = '18px';
+        box.style.color = '#f1f5f9';
+        box.style.textAlign = 'left';
+        box.style.maxHeight = '420px';
+        box.style.overflowY = 'auto';
+
+        const title = document.createElement('div');
+        title.style.display = 'flex';
+        title.style.alignItems = 'center';
+        title.style.gap = '8px';
+        title.style.marginBottom = '12px';
+        title.style.fontWeight = 'bold';
+        title.style.color = '#60a5fa';
+        title.innerHTML = `<span>⚡ Phân tích từ DeepSeek (${userDeepSeekModel})</span>`;
+        box.appendChild(title);
+
+        if (message) {
+            const notice = document.createElement('div');
+            notice.style.fontSize = '13px';
+            notice.style.color = '#93c5fd';
+            notice.style.background = 'rgba(59, 130, 246, 0.15)';
+            notice.style.padding = '10px 14px';
+            notice.style.borderRadius = '8px';
+            notice.style.marginBottom = '12px';
+            notice.style.lineHeight = '1.5';
+            notice.textContent = message;
+            box.appendChild(notice);
+        }
+
+        const pre = document.createElement('pre');
+        pre.style.whiteSpace = 'pre-wrap';
+        pre.style.wordBreak = 'break-word';
+        pre.style.fontSize = '13px';
+        pre.style.lineHeight = '1.6';
+        pre.style.color = '#cbd5e1';
+        pre.style.margin = '0';
+        pre.textContent = text;
+        box.appendChild(pre);
+
+        imageGallery.appendChild(box);
     }
     
     function displayError(message: string) {

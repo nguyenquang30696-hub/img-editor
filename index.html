@@ -18,7 +18,7 @@
                 <h1>Ảnh Thẻ KEN A.I 2.0</h1>
                 <p>Tạo ảnh thẻ chuyên nghiệp, ảnh đại diện chỉ trong vài giây.</p>
             </div>
-            <button id="apiSettingsBtn" class="api-header-btn" type="button" title="Cài đặt Gemini API & Chọn Model">
+            <button id="apiSettingsBtn" class="api-header-btn" type="button" title="Cài đặt API (Gemini & DeepSeek)">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-1-1l-3 3m5 0l-3-3m-6 8l-4 4a2.828 2.828 0 1 1-4-4l4-4a2.828 2.828 0 0 1 4 4zm0 0l7-7"/></svg>
                 <span>API</span>
                 <span id="apiKeyBadge" class="api-key-badge">Auto</span>
@@ -250,40 +250,113 @@
             <div class="api-modal-header">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <span style="font-size: 1.4rem;">🔑</span>
-                    <h2 style="margin: 0; padding: 0; border: none; font-size: 1.35rem;">Cài đặt Gemini API & Chọn Model</h2>
+                    <h2 style="margin: 0; padding: 0; border: none; font-size: 1.35rem;">Cài đặt API & Chọn Model</h2>
                 </div>
                 <button id="closeApiModalBtn" class="modal-close-btn" type="button" aria-label="Đóng">&times;</button>
             </div>
+
+            <!-- Provider Selection Tabs -->
+            <div class="api-provider-tabs">
+                <button id="tabGeminiBtn" class="api-tab-btn active" type="button" data-provider="gemini">
+                    <span class="tab-icon">✨</span>
+                    <span>Google Gemini</span>
+                    <span id="geminiTabBadge" class="tab-pill">Mặc định</span>
+                </button>
+                <button id="tabDeepseekBtn" class="api-tab-btn" type="button" data-provider="deepseek">
+                    <span class="tab-icon">🐳</span>
+                    <span>DeepSeek (Flash)</span>
+                    <span id="deepseekTabBadge" class="tab-pill">Mới</span>
+                </button>
+            </div>
+
+            <!-- Active Provider Selector Banner -->
+            <div class="active-provider-banner">
+                <span>Nhà cung cấp đang dùng để tạo ảnh:</span>
+                <div class="provider-radio-group">
+                    <label class="provider-radio-label">
+                        <input type="radio" name="activeProvider" id="useGeminiRadio" value="gemini" checked>
+                        <span>Google Gemini</span>
+                    </label>
+                    <label class="provider-radio-label">
+                        <input type="radio" name="activeProvider" id="useDeepseekRadio" value="deepseek">
+                        <span>DeepSeek Flash</span>
+                    </label>
+                </div>
+            </div>
             
             <div class="api-modal-body">
-                <div class="api-form-group">
-                    <label for="modelSelect" class="api-label">
-                        <strong>Mô hình chỉnh sửa ảnh (Model Gemini):</strong>
-                    </label>
-                    <select id="modelSelect" class="api-select">
-                        <option value="gemini-3.1-flash-lite-image" selected>gemini-3.1-flash-lite-image (Khuyên dùng - Nhanh, chuẩn ảnh thẻ)</option>
-                        <option value="gemini-nano-banana-2.1">gemini-nano-banana-2.1 (Nano Banana 2.1 - Độ nét cao)</option>
-                        <option value="gemini-3-pro-image">gemini-3-pro-image (Gemini 3 Pro Image)</option>
-                    </select>
-                    <p class="api-hint">Mô hình AI sẽ nhận ảnh chân dung cùng các tùy chỉnh để xuất ra ảnh thẻ hoàn chỉnh.</p>
-                </div>
-
-                <div class="api-form-group" style="margin-top: 1.25rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-                        <label for="apiKeysInput" class="api-label" style="margin: 0;">
-                            <strong>Danh sách Gemini API Keys:</strong>
+                <!-- Tab Pane 1: Google Gemini -->
+                <div id="geminiTabPane" class="api-tab-pane active">
+                    <div class="api-form-group">
+                        <label for="modelSelect" class="api-label">
+                            <strong>Mô hình chỉnh sửa ảnh (Model Gemini):</strong>
                         </label>
-                        <span id="activeKeyStatus" class="active-key-pill">Đang dùng: Mặc định môi trường</span>
+                        <select id="modelSelect" class="api-select">
+                            <option value="gemini-3.1-flash-lite-image" selected>gemini-3.1-flash-lite-image (Khuyên dùng - Nhanh, chuẩn ảnh thẻ)</option>
+                            <option value="gemini-nano-banana-2.1">gemini-nano-banana-2.1 (Nano Banana 2.1 - Độ nét cao)</option>
+                            <option value="gemini-3-pro-image">gemini-3-pro-image (Gemini 3 Pro Image)</option>
+                            <option value="gemini-2.5-flash-image">gemini-2.5-flash-image</option>
+                        </select>
+                        <p class="api-hint">Mô hình AI nhận ảnh chân dung cùng các tùy chỉnh để xử lý ảnh thẻ.</p>
                     </div>
-                    <textarea id="apiKeysInput" class="api-textarea" rows="6" placeholder="Dán các API Key của bạn vào đây (mỗi key trên 1 dòng):&#10;AIzaSy...Key1&#10;AIzaSy...Key2&#10;AIzaSy...Key3"></textarea>
-                    <p class="api-hint">
-                        💡 <strong>Cơ chế Xoay vòng (Round-Robin):</strong> Khi nhập nhiều key, hệ thống sẽ tự động luân phiên đổi key sau mỗi lần tạo ảnh, đồng thời tự động chuyển key dự phòng nếu một key gặp lỗi quota (429 Rate Limit). Nếu để trống, hệ thống sẽ tự dùng key có sẵn trong môi trường.
-                    </p>
+
+                    <div class="api-form-group" style="margin-top: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <label for="apiKeysInput" class="api-label" style="margin: 0;">
+                                <strong>Danh sách Gemini API Keys:</strong>
+                            </label>
+                            <span id="activeKeyStatus" class="active-key-pill">Đang dùng: Mặc định môi trường</span>
+                        </div>
+                        <textarea id="apiKeysInput" class="api-textarea" rows="5" placeholder="Dán các Gemini API Key vào đây (mỗi key trên 1 dòng):&#10;AIzaSy...Key1&#10;AIzaSy...Key2"></textarea>
+                        <p class="api-hint">
+                            💡 <strong>Xoay vòng Round-Robin:</strong> Tự động luân phiên đổi key sau mỗi lần tạo ảnh và tự động chuyển key khi gặp lỗi rate limit (429).
+                        </p>
+                    </div>
+
+                    <div id="roundRobinInfoBar" class="round-robin-info-bar">
+                        <span id="roundRobinStatusText">🔁 Trạng thái: Chưa có key riêng (dùng key môi trường)</span>
+                    </div>
                 </div>
 
-                <div id="roundRobinInfoBar" class="round-robin-info-bar">
-                    <span id="roundRobinStatusText">🔁 Trạng thái: Chưa có key riêng (dùng key môi trường)</span>
+                <!-- Tab Pane 2: DeepSeek Flash -->
+                <div id="deepseekTabPane" class="api-tab-pane hidden">
+                    <div class="api-form-group">
+                        <label for="deepseekModelSelect" class="api-label">
+                            <strong>Mô hình DeepSeek (Model):</strong>
+                        </label>
+                        <select id="deepseekModelSelect" class="api-select">
+                            <option value="deepseek-flash" selected>deepseek-flash (DeepSeek Flash - Tốc độ cao)</option>
+                            <option value="deepseek-chat">deepseek-chat (DeepSeek V3 Chat)</option>
+                            <option value="deepseek-reasoner">deepseek-reasoner (DeepSeek R1 Suy luận)</option>
+                        </select>
+                        <p class="api-hint">Sử dụng DeepSeek để điều khiển và tối ưu hóa luồng xử lý ảnh chân dung.</p>
+                    </div>
+
+                    <div class="api-form-group" style="margin-top: 1rem;">
+                        <label for="deepseekBaseUrlInput" class="api-label">
+                            <strong>API Base URL (Tùy chọn):</strong>
+                        </label>
+                        <input type="text" id="deepseekBaseUrlInput" class="api-input" placeholder="https://api.deepseek.com/v1" value="https://api.deepseek.com/v1">
+                    </div>
+
+                    <div class="api-form-group" style="margin-top: 1rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <label for="deepseekApiKeysInput" class="api-label" style="margin: 0;">
+                                <strong>Danh sách DeepSeek API Keys:</strong>
+                            </label>
+                            <span id="deepseekKeyStatus" class="active-key-pill">Chưa có key</span>
+                        </div>
+                        <textarea id="deepseekApiKeysInput" class="api-textarea" rows="4" placeholder="Dán các DeepSeek API Key (bắt đầu bằng sk-...) vào đây, mỗi key trên 1 dòng:&#10;sk-xxxx...Key1&#10;sk-xxxx...Key2"></textarea>
+                        <p class="api-hint">
+                            💡 Hỗ trợ xoay vòng Round-Robin cho nhiều DeepSeek API Keys.
+                        </p>
+                    </div>
+
+                    <div id="deepseekRoundRobinBar" class="round-robin-info-bar">
+                        <span id="deepseekRoundRobinText">🔁 Trạng thái: Chưa cấu hình key DeepSeek</span>
+                    </div>
                 </div>
+
                 <div id="testKeyFeedback" class="test-feedback-box hidden"></div>
             </div>
 

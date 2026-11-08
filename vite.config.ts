@@ -7,6 +7,13 @@ function sanitizeKey(key?: string): string {
   return key.trim().replace(/^[;,\s"']+|[;,\s"']+$/g, '');
 }
 
+function sanitizeBaseUrl(url?: string): string {
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    return 'https://api.deepseek.com/v1';
+  }
+  return url.trim().replace(/\/+$/, '');
+}
+
 function apiDevPlugin(): Plugin {
   return {
     name: 'api-dev-server',
@@ -24,12 +31,77 @@ function apiDevPlugin(): Plugin {
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
           try {
-            const { apiKey, model } = JSON.parse(body || '{}');
+            const { provider = 'gemini', apiKey, model, baseUrl } = JSON.parse(body || '{}');
+
+            if (provider === 'deepseek') {
+              const cleanKey = sanitizeKey(apiKey) || process.env.DEEPSEEK_API_KEY || '';
+              if (!cleanKey) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, message: 'Chưa nhập DeepSeek API Key.' }));
+                return;
+              }
+
+              const cleanUrl = sanitizeBaseUrl(baseUrl);
+              const selectedModel = model || 'deepseek-flash';
+
+              try {
+                const deepseekRes = await fetch(`${cleanUrl}/chat/completions`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${cleanKey}`,
+                  },
+                  body: JSON.stringify({
+                    model: selectedModel === 'deepseek-flash' ? 'deepseek-chat' : selectedModel,
+                    messages: [{ role: 'user', content: 'test connection' }],
+                    max_tokens: 5,
+                  }),
+                });
+
+                const data = await deepseekRes.json();
+                res.setHeader('Content-Type', 'application/json');
+
+                if (deepseekRes.ok) {
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({
+                    success: true,
+                    message: `Key DeepSeek hợp lệ! Kết nối thành công tới model ${selectedModel}.`,
+                  }));
+                  return;
+                }
+
+                const errMsg = data?.error?.message || data?.message || JSON.stringify(data);
+                res.statusCode = 200;
+                if (deepseekRes.status === 401) {
+                  res.end(JSON.stringify({ success: false, code: 401, message: 'DeepSeek API Key không hợp lệ.' }));
+                  return;
+                }
+                if (deepseekRes.status === 402) {
+                  res.end(JSON.stringify({ success: false, code: 402, message: 'Tài khoản DeepSeek hết số dư (Insufficient Balance).' }));
+                  return;
+                }
+                if (deepseekRes.status === 429) {
+                  res.end(JSON.stringify({ success: false, code: 429, message: 'DeepSeek API chạm hạn mức Rate Limit (429).' }));
+                  return;
+                }
+
+                res.end(JSON.stringify({ success: false, code: deepseekRes.status, message: errMsg }));
+                return;
+              } catch (e: any) {
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, message: `Lỗi kết nối tới DeepSeek endpoint: ${e.message}` }));
+                return;
+              }
+            }
+
+            // Default: Gemini
             const cleanKey = sanitizeKey(apiKey) || process.env.GEMINI_API_KEY || process.env.API_KEY || '';
             if (!cleanKey) {
               res.statusCode = 400;
               res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ success: false, message: 'Chưa cung cấp API Key để kiểm tra.' }));
+              res.end(JSON.stringify({ success: false, message: 'Chưa cung cấp Gemini API Key để kiểm tra.' }));
               return;
             }
 
@@ -45,14 +117,14 @@ function apiDevPlugin(): Plugin {
 
             await ai.models.generateContent({
               model: selectedModel,
-              contents: 'test'
+              contents: 'test',
             });
 
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({
               success: true,
-              message: `Key hoạt động tốt và có quyền truy cập model ${selectedModel}!`
+              message: `Key Gemini hoạt động tốt và có quyền truy cập model ${selectedModel}!`,
             }));
           } catch (error: any) {
             const msg = error?.message || '';
@@ -65,7 +137,7 @@ function apiDevPlugin(): Plugin {
                 success: false,
                 code: 429,
                 errorType: 'FREE_TIER_NO_QUOTA',
-                message: 'Key hợp lệ nhưng thuộc gói Free Tier (hạn mức model tạo ảnh là 0 lượt/phút). Google yêu cầu tài khoản API Key phải bật Billing (Pay-as-you-go) tại https://aistudio.google.com để dùng các model tạo ảnh.'
+                message: 'Key hợp lệ nhưng thuộc gói Free Tier (hạn mức model tạo ảnh là 0 lượt/phút). Google yêu cầu tài khoản API Key phải bật Billing (Pay-as-you-go) tại https://aistudio.google.com để dùng các model tạo ảnh.',
               }));
               return;
             }
@@ -76,7 +148,7 @@ function apiDevPlugin(): Plugin {
                 success: false,
                 code: status,
                 errorType: 'INVALID_KEY',
-                message: 'API Key không hợp lệ hoặc thiếu quyền hạn.'
+                message: 'API Key không hợp lệ hoặc thiếu quyền hạn.',
               }));
               return;
             }
@@ -85,7 +157,7 @@ function apiDevPlugin(): Plugin {
             res.end(JSON.stringify({
               success: false,
               code: status,
-              message: msg || 'Không thể kết nối đến Gemini API.'
+              message: msg || 'Không thể kết nối đến Gemini API.',
             }));
           }
         });
@@ -107,7 +179,7 @@ function apiDevPlugin(): Plugin {
 
         req.on('end', async () => {
           try {
-            const { parts, apiKey: clientApiKey, model: clientModel } = JSON.parse(body || '{}');
+            const { parts, apiKey: clientApiKey, model: clientModel, provider = 'gemini', baseUrl } = JSON.parse(body || '{}');
             if (!parts || !Array.isArray(parts)) {
               res.statusCode = 400;
               res.setHeader('Content-Type', 'application/json');
@@ -115,6 +187,72 @@ function apiDevPlugin(): Plugin {
               return;
             }
 
+            // --- DEEPSEEK PROVIDER ---
+            if (provider === 'deepseek') {
+              const cleanKey = sanitizeKey(clientApiKey) || process.env.DEEPSEEK_API_KEY;
+              if (!cleanKey) {
+                res.statusCode = 401;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  error: 'Chưa có DeepSeek API Key. Vui lòng bấm nút API > chọn tab DeepSeek để nhập key.',
+                }));
+                return;
+              }
+
+              const cleanUrl = sanitizeBaseUrl(baseUrl);
+              const selectedModel = (clientModel === 'deepseek-flash' || !clientModel) ? 'deepseek-chat' : clientModel;
+              const promptText = parts.filter((p: any) => p.text).map((p: any) => p.text).join('\n') || 'Chỉnh sửa ảnh thẻ chuyên nghiệp';
+
+              const deepseekRes = await fetch(`${cleanUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${cleanKey}`,
+                },
+                body: JSON.stringify({
+                  model: selectedModel,
+                  messages: [
+                    {
+                      role: 'system',
+                      content: 'You are an expert AI photo generator and stylist for professional Vietnamese ID photos (ảnh thẻ). Analyze the request and provide output.',
+                    },
+                    {
+                      role: 'user',
+                      content: promptText,
+                    },
+                  ],
+                }),
+              });
+
+              const data = await deepseekRes.json();
+              res.setHeader('Content-Type', 'application/json');
+
+              if (!deepseekRes.ok) {
+                const msg = data?.error?.message || data?.message || `Lỗi DeepSeek (${deepseekRes.status})`;
+                res.statusCode = deepseekRes.status;
+                res.end(JSON.stringify({ error: msg }));
+                return;
+              }
+
+              const replyContent = data.choices?.[0]?.message?.content || '';
+              const imgMatch = replyContent.match(/!\[.*?\]\((https?:\/\/.*?)\)/) || replyContent.match(/(https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|webp))/i);
+
+              if (imgMatch) {
+                res.statusCode = 200;
+                res.end(JSON.stringify({ imageUrl: imgMatch[1], text: replyContent }));
+                return;
+              }
+
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                imageUrl: null,
+                text: replyContent,
+                message: 'DeepSeek Flash đã phân tích yêu cầu tạo ảnh thẻ thành công. Lưu ý: DeepSeek là mô hình ngôn ngữ (LLM); để render trực tiếp pixel ảnh thẻ, bạn hãy chuyển sang tab Google Gemini (model gemini-3.1-flash-lite-image).',
+              }));
+              return;
+            }
+
+            // --- GEMINI PROVIDER ---
             const cleanClientKey = sanitizeKey(clientApiKey);
             const effectiveKey = cleanClientKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
 
@@ -122,7 +260,7 @@ function apiDevPlugin(): Plugin {
               res.statusCode = 401;
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({
-                error: 'Chưa có Gemini API Key. Vui lòng bấm nút API ở góc trên bên phải để thêm API Key của bạn hoặc thiết lập biến môi trường.'
+                error: 'Chưa có Gemini API Key. Vui lòng bấm nút API ở góc trên bên phải để thêm API Key của bạn hoặc thiết lập biến môi trường.',
               }));
               return;
             }
@@ -143,7 +281,7 @@ function apiDevPlugin(): Plugin {
 
             const response = await ai.models.generateContent({
               model: selectedModel,
-              contents: { parts }
+              contents: { parts },
             });
 
             let imageUrl: string | null = null;
@@ -166,7 +304,7 @@ function apiDevPlugin(): Plugin {
               res.statusCode = 500;
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({
-                error: textOutput || 'Không tạo được ảnh từ AI. Vui lòng thử lại.'
+                error: textOutput || 'Không tạo được ảnh từ AI. Vui lòng thử lại.',
               }));
               return;
             }
@@ -205,6 +343,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
-    }
-  }
+    },
+  },
 });
